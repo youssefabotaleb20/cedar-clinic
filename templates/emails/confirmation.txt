@@ -1,0 +1,12 @@
+{% autoescape off %}Hello {{ appointment.patient.first_name|default:appointment.patient.username }},
+
+Your appointment is booked.
+
+Doctor: {{ appointment.doctor }} ({{ appointment.doctor.specialty }})
+When:   {{ appointment.date|date:"l j F Y" }} at {{ appointment.start_time|time:"H:i" }}
+{% if appointment.reason %}Reason: {{ appointment.reason }}
+{% endif %}
+We'll send you a reminder the day before. If you can't make it, please cancel from "My appointments" so someone else can take the slot.
+
+{{ clinic_name }}
+{% endautoescape %}

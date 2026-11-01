@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Front desk{% endblock %}
+{% block content %}
+<div class="dash-head">
+  <h1>Front desk · {{ day|date:"l j F Y" }}</h1>
+  <nav class="dash-nav">
+    <a class="btn btn-ghost" href="?date={{ previous_day|date:'Y-m-d' }}">← Previous</a>
+    <a class="btn btn-ghost" href="?">Today</a>
+    <a class="btn btn-ghost" href="?date={{ next_day|date:'Y-m-d' }}">Next →</a>
+  </nav>
+</div>
+<div class="stats">
+  <div class="stat"><span>{{ counts.booked }}</span>Booked</div>
+  <div class="stat"><span>{{ counts.completed }}</span>Completed</div>
+  <div class="stat"><span>{{ counts.no_show }}</span>No-shows</div>
+  <div class="stat"><span>{{ counts.cancelled }}</span>Cancelled</div>
+</div>
+<div class="table-scroll">
+<table class="table">
+  <thead><tr><th>Time</th><th>Doctor</th><th>Patient</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for a in appointments %}
+    <tr>
+      <td>{{ a.start_time|time:"H:i" }}</td>
+      <td>{{ a.doctor }}</td>
+      <td>{{ a.patient.get_full_name|default:a.patient.username }}<br><span class="muted small">{{ a.patient.email }}</span></td>
+      <td>{{ a.reason|default:"—" }}</td>
+      <td><span class="badge badge-{{ a.status }}">{{ a.get_status_display }}</span></td>
+      <td>
+        {% if a.status == statuses.BOOKED %}
+        <div class="actions">
+          <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-small" name="status" value="completed">Completed</button></form>
+          <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-small" name="status" value="no_show">No-show</button></form>
+          <form method="post" action="{% url 'booking:set_status' a.pk %}" onsubmit="return confirm('Cancel and email the patient?')">{% csrf_token %}<button class="btn btn-ghost btn-small" name="status" value="cancelled">Cancel</button></form>
+        </div>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="empty">No appointments on this day.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<section class="card auth">
+  <h1>Log in</h1>
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+    <label class="field">Username {{ form.username }}</label>
+    <label class="field">Password {{ form.password }}</label>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn btn-large" type="submit">Log in</button>
+  </form>
+  <p class="muted">New here? <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a>.</p>
+  <p class="muted small">Demo accounts: <code>patient</code> or <code>staff</code>, password <code>demo-pass-123</code>.</p>
+</section>
+{% endblock %}

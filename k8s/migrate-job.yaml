@@ -1,0 +1,25 @@
+# Runs migrations and loads demo data. Jobs are immutable, so delete it before
+# re-applying after an image change: kubectl -n clinic delete job migrate
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+spec:
+  backoffLimit: 10  # retries while MySQL is still starting
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: migrate
+          image: clinic-booking
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_demo"]
+          envFrom:
+            - configMapRef: {name: clinic-config}
+            - secretRef: {name: clinic-secrets}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}

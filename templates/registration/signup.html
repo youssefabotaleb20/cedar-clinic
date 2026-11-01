@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign up{% endblock %}
+{% block content %}
+<section class="card auth">
+  <h1>Create an account</h1>
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+      <label class="field">{{ field.label }} {{ field }}
+        {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      </label>
+    {% endfor %}
+    <button class="btn btn-large" type="submit">Sign up</button>
+  </form>
+</section>
+{% endblock %}

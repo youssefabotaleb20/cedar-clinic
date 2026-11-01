@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      initContainers:
+        # Hold the rollout until the migrate Job has brought the schema up to date.
+        - name: wait-for-migrations
+          image: clinic-booking
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "until python manage.py migrate --check >/dev/null 2>&1; do echo waiting for migrations; sleep 3; done"]
+          envFrom:
+            - configMapRef: {name: clinic-config}
+            - secretRef: {name: clinic-secrets}
+      containers:
+        - name: web
+          image: clinic-booking
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8000}
+          env:
+            - {name: WEB_CONCURRENCY, value: "2"}
+          envFrom:
+            - configMapRef: {name: clinic-config}
+            - secretRef: {name: clinic-secrets}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http, httpHeaders: [{name: Host, value: localhost}]}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http, httpHeaders: [{name: Host, value: localhost}]}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: web
+  ports:
+    - {name: http, port: 80, targetPort: http}

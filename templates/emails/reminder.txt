@@ -1,0 +1,8 @@
+{% autoescape off %}Hello {{ appointment.patient.first_name|default:appointment.patient.username }},
+
+A reminder that you have an appointment with {{ appointment.doctor }} on {{ appointment.date|date:"l j F" }} at {{ appointment.start_time|time:"H:i" }}.
+
+Please arrive 10 minutes early. If you can't make it, cancel from "My appointments".
+
+{{ clinic_name }}
+{% endautoescape %}

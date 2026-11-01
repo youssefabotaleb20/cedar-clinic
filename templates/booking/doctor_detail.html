@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ doctor }}{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'booking:home' %}">← All doctors</a>
+<section class="card">
+  <h1>{{ doctor }}</h1>
+  <p class="muted">{{ doctor.specialty }} · {{ doctor.slot_minutes }} min visits</p>
+  <p>{{ doctor.bio }}</p>
+</section>
+
+<h2 class="section-title">1. Choose a day</h2>
+<div class="days" role="list">
+  {% for day in open_days %}
+    <a role="listitem" class="day {% if day == selected %}day-active{% endif %}" href="?date={{ day|date:'Y-m-d' }}">
+      <span class="day-name">{{ day|date:"D" }}</span>
+      <span class="day-num">{{ day|date:"j" }}</span>
+      <span class="day-month">{{ day|date:"M" }}</span>
+    </a>
+  {% empty %}
+    <p class="empty">This doctor has no working hours in the next few weeks.</p>
+  {% endfor %}
+</div>
+
+{% if selected %}
+<h2 class="section-title">2. Pick a time on {{ selected|date:"l j F" }}</h2>
+<form method="post" class="booking-form">
+  {% csrf_token %}
+  <input type="hidden" name="date" value="{{ selected|date:'Y-m-d' }}">
+  <div class="slots">
+    {% for slot in slots %}
+      <label class="slot"><input type="radio" name="start_time" value="{{ slot|time:'H:i' }}" required><span>{{ slot|time:"H:i" }}</span></label>
+    {% empty %}
+      <p class="empty">Fully booked. Try another day.</p>
+    {% endfor %}
+  </div>
+  {% if slots %}
+    <label class="field">Reason for visit {{ form.reason }}</label>
+    {% if user.is_authenticated %}
+      <button class="btn btn-large" type="submit">Book appointment</button>
+    {% else %}
+      <p class="muted"><a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Log in</a> or <a href="{% url 'signup' %}?next={{ request.get_full_path|urlencode }}">create an account</a> to book.</p>
+    {% endif %}
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}
