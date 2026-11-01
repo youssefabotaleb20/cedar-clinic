@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests on MySQL 8.4
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: clinic
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DJANGO_TESTING: "1"
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/clinic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
+      - run: pip install -r requirements.txt
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test -v 2
+
+  compose:
+    name: Docker Compose smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose up -d --build --wait web
+      - name: App answers and demo data loaded
+        run: |
+          curl -fsS http://localhost:8000/healthz
+          curl -fsS http://localhost:8000/ | grep -q "Mona Hassan"
+      - if: failure()
+        run: docker compose logs
+      - run: docker compose down -v
+
+  kubernetes:
+    name: Deploy to kind
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: clinic
+      - run: docker build -t clinic-booking:local .
+      - run: kind load docker-image clinic-booking:local --name clinic
+      - run: kubectl apply -k k8s/
+      - run: kubectl -n clinic wait --for=condition=complete job/migrate --timeout=300s
+      - run: kubectl -n clinic rollout status deployment/web --timeout=180s
+      - name: App answers through its Service
+        run: |
+          kubectl -n clinic port-forward svc/web 8080:80 &
+          sleep 3
+          curl -fsS -H "Host: localhost" http://localhost:8080/healthz
+          kubectl -n clinic create job reminders-smoke --from=cronjob/send-reminders
+          kubectl -n clinic wait --for=condition=complete job/reminders-smoke --timeout=120s
+      - if: failure()
+        run: |
+          kubectl -n clinic get all
+          kubectl -n clinic describe pods
+          kubectl -n clinic logs job/migrate --tail=100 || true

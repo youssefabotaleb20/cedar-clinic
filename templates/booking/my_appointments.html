@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}My appointments{% endblock %}
+{% block content %}
+<h1>My appointments</h1>
+<h2 class="section-title">Upcoming</h2>
+{% for a in upcoming %}
+  <article class="card appt">
+    <div class="appt-when"><strong>{{ a.date|date:"D j M" }}</strong><span>{{ a.start_time|time:"H:i" }} to {{ a.end_time|time:"H:i" }}</span></div>
+    <div class="appt-what"><strong>{{ a.doctor }}</strong><span class="muted">{{ a.doctor.specialty }}{% if a.reason %} · {{ a.reason }}{% endif %}</span></div>
+    {% if a.can_cancel %}
+      <form method="post" action="{% url 'booking:cancel' a.pk %}" onsubmit="return confirm('Cancel this appointment?')">{% csrf_token %}<button class="btn btn-ghost">Cancel</button></form>
+    {% endif %}
+  </article>
+{% empty %}
+  <p class="empty">Nothing booked. <a href="{% url 'booking:home' %}">Find a doctor</a>.</p>
+{% endfor %}
+
+{% if past %}
+<h2 class="section-title">History</h2>
+<table class="table">
+  <thead><tr><th>Date</th><th>Time</th><th>Doctor</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for a in past %}
+    <tr><td>{{ a.date|date:"j M Y" }}</td><td>{{ a.start_time|time:"H:i" }}</td><td>{{ a.doctor }}</td><td><span class="badge badge-{{ a.status }}">{{ a.get_status_display }}</span></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

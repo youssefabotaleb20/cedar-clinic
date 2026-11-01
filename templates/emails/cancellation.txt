@@ -1,0 +1,8 @@
+{% autoescape off %}Hello {{ appointment.patient.first_name|default:appointment.patient.username }},
+
+Your appointment with {{ appointment.doctor }} on {{ appointment.date|date:"l j F" }} at {{ appointment.start_time|time:"H:i" }} has been cancelled.
+
+You can book a new time whenever you like.
+
+{{ clinic_name }}
+{% endautoescape %}

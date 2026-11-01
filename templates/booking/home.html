@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Doctors{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Book a visit in under a minute</h1>
+  <p>Pick a doctor, choose a free time, and we email you a confirmation and a reminder the day before.</p>
+</section>
+
+<form class="filters" method="get">
+  <a class="chip {% if not selected_specialty %}chip-active{% endif %}" href="{% url 'booking:home' %}">All</a>
+  {% for specialty in specialties %}
+    <a class="chip {% if selected_specialty == specialty.pk|stringformat:'s' %}chip-active{% endif %}" href="?specialty={{ specialty.pk }}">{{ specialty.name }}</a>
+  {% endfor %}
+</form>
+
+<div class="grid">
+  {% for doctor in doctors %}
+    <article class="card doctor-card">
+      <div class="avatar" aria-hidden="true">{{ doctor.name|slice:":1" }}</div>
+      <div>
+        <h2>{{ doctor }}</h2>
+        <p class="muted">{{ doctor.specialty }} · {{ doctor.slot_minutes }} min visits</p>
+        <p>{{ doctor.bio }}</p>
+        <a class="btn" href="{% url 'booking:doctor_detail' doctor.pk %}">See free times</a>
+      </div>
+    </article>
+  {% empty %}
+    <p class="empty">No doctors yet. Run <code>python manage.py seed_demo</code> or add some in the admin.</p>
+  {% endfor %}
+</div>
+{% endblock %}

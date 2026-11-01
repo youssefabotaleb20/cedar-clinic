@@ -1,0 +1,28 @@
+# Render Blueprint. Render has no managed MySQL, so point DATABASE_URL at a
+# MySQL host of your choice (for example Aiven's free MySQL plan).
+services:
+  - type: web
+    name: clinic-booking
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    dockerCommand: >-
+      sh -c "python manage.py migrate --noinput && python manage.py seed_demo &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --access-logfile -"
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "1"

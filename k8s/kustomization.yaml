@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: clinic
+
+resources:
+  - namespace.yaml
+  - mysql.yaml
+  - mailpit.yaml
+  - migrate-job.yaml
+  - web.yaml
+  - reminders-cronjob.yaml
+  - ingress.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: clinic-booking
+
+configMapGenerator:
+  - name: clinic-config
+    literals:
+      - DJANGO_DEBUG=0
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,clinic.localtest.me,web
+      - DJANGO_SECURE_COOKIES=0
+      - EMAIL_HOST=mailpit
+      - EMAIL_PORT=1025
+      - MYSQL_DATABASE=clinic
+      - MYSQL_USER=clinic
+
+# Local demo secrets only. For a real cluster, delete this generator and create
+# the secret yourself (kubectl create secret generic clinic-secrets ...) or use
+# Sealed Secrets / External Secrets.
+secretGenerator:
+  - name: clinic-secrets
+    literals:
+      - DJANGO_SECRET_KEY=local-kind-only-change-me
+      - MYSQL_PASSWORD=clinic-password
+      - MYSQL_ROOT_PASSWORD=root-password
+      - DATABASE_URL=mysql://clinic:clinic-password@mysql:3306/clinic
+      - DEMO_PASSWORD=demo-pass-123
+
+images:
+  - name: clinic-booking
+    newName: clinic-booking
+    newTag: local
