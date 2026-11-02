@@ -56,8 +56,8 @@ jobs:
       - uses: helm/kind-action@v1.12.0
         with:
           cluster_name: clinic
-      - run: docker build -t clinic-booking:local .
-      - run: kind load docker-image clinic-booking:local --name clinic
+      - run: docker build -t cedar-clinic:local .
+      - run: kind load docker-image cedar-clinic:local --name clinic
       - run: kubectl apply -k k8s/
       - run: kubectl -n clinic wait --for=condition=complete job/migrate --timeout=300s
       - run: kubectl -n clinic rollout status deployment/web --timeout=180s
