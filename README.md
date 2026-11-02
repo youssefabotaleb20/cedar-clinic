@@ -1,4 +1,4 @@
-# Cedar Clinic: clinic booking system
+# Cedar Clinic: clinic booking system (`cedar-clinic`)
 
 A clinic appointment system built with **Django and MySQL**, packaged with **Docker Compose** and deployable to **Kubernetes**.
 
@@ -58,8 +58,8 @@ docker compose up --build
 
 ```bash
 kind create cluster --name clinic --config k8s/kind-config.yaml
-docker build -t clinic-booking:local .
-kind load docker-image clinic-booking:local --name clinic
+docker build -t cedar-clinic:local .
+kind load docker-image cedar-clinic:local --name clinic
 kubectl apply -k k8s/
 kubectl -n clinic wait --for=condition=complete job/migrate --timeout=300s
 kubectl -n clinic rollout status deployment/web

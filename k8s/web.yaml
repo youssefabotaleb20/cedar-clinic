@@ -20,7 +20,7 @@ spec:
       initContainers:
         # Hold the rollout until the migrate Job has brought the schema up to date.
         - name: wait-for-migrations
-          image: clinic-booking
+          image: cedar-clinic
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "until python manage.py migrate --check >/dev/null 2>&1; do echo waiting for migrations; sleep 3; done"]
           envFrom:
@@ -28,7 +28,7 @@ spec:
             - secretRef: {name: clinic-secrets}
       containers:
         - name: web
-          image: clinic-booking
+          image: cedar-clinic
           imagePullPolicy: IfNotPresent
           ports:
             - {name: http, containerPort: 8000}

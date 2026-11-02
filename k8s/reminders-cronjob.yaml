@@ -18,7 +18,7 @@ spec:
             runAsUser: 1000
           containers:
             - name: send-reminders
-              image: clinic-booking
+              image: cedar-clinic
               imagePullPolicy: IfNotPresent
               command: ["python", "manage.py", "send_reminders"]
               envFrom:

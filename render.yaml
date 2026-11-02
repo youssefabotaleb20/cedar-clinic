@@ -2,7 +2,7 @@
 # MySQL host of your choice (for example Aiven's free MySQL plan).
 services:
   - type: web
-    name: clinic-booking
+    name: cedar-clinic
     runtime: docker
     plan: free
     healthCheckPath: /healthz

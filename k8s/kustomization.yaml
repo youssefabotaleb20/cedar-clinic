@@ -13,7 +13,7 @@ resources:
 
 labels:
   - pairs:
-      app.kubernetes.io/part-of: clinic-booking
+      app.kubernetes.io/part-of: cedar-clinic
 
 configMapGenerator:
   - name: clinic-config
@@ -39,6 +39,6 @@ secretGenerator:
       - DEMO_PASSWORD=demo-pass-123
 
 images:
-  - name: clinic-booking
-    newName: clinic-booking
+  - name: cedar-clinic
+    newName: cedar-clinic
     newTag: local
