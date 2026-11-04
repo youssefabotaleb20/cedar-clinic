@@ -23,4 +23,4 @@ RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request,os;urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/healthz')"
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT} --workers ${WEB_CONCURRENCY:-3} --access-logfile -"]
+CMD ["/app/docker/entrypoint.sh"]

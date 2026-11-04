@@ -1,7 +1,7 @@
 """Django settings for the clinic booking system.
 
 Everything environment-specific comes from environment variables so the same
-image runs locally, in Docker Compose, on Kubernetes and on Render.
+image runs locally, in Docker Compose, on Kubernetes and on a Hugging Face Space.
 """
 
 import os
@@ -31,10 +31,10 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-# Render sets this for every web service.
-if render_host := os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
-    ALLOWED_HOSTS.append(render_host)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{render_host}")
+# Hugging Face Spaces set SPACE_HOST (e.g. user-cedar-clinic.hf.space).
+if space_host := os.environ.get("SPACE_HOST"):
+    ALLOWED_HOSTS.append(space_host)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{space_host}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -87,9 +87,13 @@ DATABASES = {
     )
 }
 if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
-    DATABASES["default"].setdefault("OPTIONS", {}).update(
-        {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}
-    )
+    db_options = DATABASES["default"].setdefault("OPTIONS", {})
+    db_options.update({"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"})
+    # Hosted MySQL (Aiven, TiDB Cloud) hands out URIs ending in ?ssl-mode=REQUIRED.
+    # mysqlclient spells that option ssl_mode, so translate it.
+    ssl_mode = db_options.pop("ssl-mode", None) or os.environ.get("DB_SSL_MODE")
+    if ssl_mode:
+        db_options["ssl_mode"] = ssl_mode.upper()
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -140,6 +144,15 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", True)
     CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Hugging Face shows a Space inside an iframe on huggingface.co. Browsers treat
+# that as a third-party context, so cookies must be SameSite=None (and Secure),
+# and the page must allow huggingface.co to frame it.
+if env_bool("DJANGO_ALLOW_HF_EMBED", False):
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = CSRF_COOKIE_SAMESITE = "None"
+    CONTENT_SECURITY_POLICY_FRAME_ANCESTORS = "'self' https://huggingface.co"
+    MIDDLEWARE.insert(0, "config.middleware.frame_ancestors")
 
 LOGGING = {
     "version": 1,
