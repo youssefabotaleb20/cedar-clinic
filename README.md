@@ -104,15 +104,34 @@ GitHub Actions (`.github/workflows/ci.yml`) runs three jobs on every push:
 2. A **Docker Compose** smoke test that builds, starts the stack and checks the app.
 3. A **Kubernetes** deploy to a kind cluster that waits for migrations and the rollout, checks `/healthz` through the Service and runs the reminders CronJob once.
 
-## Deploying to Render
+## Free live demo: Hugging Face Space + Aiven MySQL
 
-`render.yaml` is a Render Blueprint for the Docker image. Render doesn't offer managed MySQL, so set `DATABASE_URL` to an external MySQL server (Aiven has a free plan), and set the `EMAIL_*` variables for an SMTP provider. Render's free plan has no cron jobs, so on Render the reminders need a paid cron job or an external scheduler running `python manage.py send_reminders`.
+The demo runs at no cost and needs no credit card:
+
+- **App:** a [Hugging Face Docker Space](https://huggingface.co/docs/hub/spaces-sdks-docker) built from this repo's `Dockerfile`.
+- **Database:** [Aiven's free MySQL plan](https://aiven.io/free-mysql-database).
+
+A Space runs one container, so it switches on two extras in `docker/entrypoint.sh`: migrations and demo data on start, and a background loop that sends reminders.
+
+Setup, done once:
+
+1. Create a free MySQL service on Aiven and copy its **Service URI** (`mysql://avnadmin:...@...aivencloud.com:PORT/defaultdb?ssl-mode=REQUIRED`).
+2. Create a Space with the **Docker** SDK and the blank template. In its **Settings**, add:
+   - Secrets: `DATABASE_URL` (the Aiven URI) and `DJANGO_SECRET_KEY` (any long random string).
+   - Variables: `RUN_MIGRATIONS_ON_START=1`, `RUN_REMINDER_LOOP=1`, `DJANGO_ALLOW_HF_EMBED=1`, `WEB_CONCURRENCY=2`.
+3. On GitHub, go to **Settings > Secrets and variables > Actions** and add:
+   - Secret `HF_TOKEN`: a Hugging Face token with write access.
+   - Variable `HF_SPACE`: for example `youssefabotaleb20/cedar-clinic`.
+
+From then on, every push to `main` that passes CI is deployed to the Space by `.github/workflows/deploy-space.yml`.
+
+Free Spaces go to sleep after about two days without visitors and wake up on the next visit. Emails go to the console unless you set the `EMAIL_*` variables for an SMTP provider.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | SQLite file | e.g. `mysql://user:pass@host:3306/clinic` |
+| `DATABASE_URL` | SQLite file | e.g. `mysql://user:pass@host:3306/clinic`; `?ssl-mode=REQUIRED` is honoured |
 | `DJANGO_SECRET_KEY` | required unless debug | |
 | `DJANGO_DEBUG` | `0` | |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | comma separated |
@@ -121,3 +140,6 @@ GitHub Actions (`.github/workflows/ci.yml`) runs three jobs on every push:
 | `CLINIC_TIME_ZONE` | `Africa/Cairo` | |
 | `BOOKING_WINDOW_DAYS` | `30` | how far ahead patients can book |
 | `REMINDER_HOURS_AHEAD` | `24` | when reminders go out |
+| `RUN_MIGRATIONS_ON_START` | `0` | single-container hosts: migrate and seed on start |
+| `RUN_REMINDER_LOOP` | `0` | single-container hosts: send reminders every `REMINDER_INTERVAL_SECONDS` (600) |
+| `DJANGO_ALLOW_HF_EMBED` | `0` | allow the huggingface.co iframe (cross-site cookies, frame-ancestors) |
