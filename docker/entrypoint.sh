@@ -1,7 +1,7 @@
 #!/bin/sh
 # Default container command. Compose and Kubernetes run migrations and
 # reminders as separate services/jobs, so both extras are off by default.
-# Single-container hosts (Hugging Face Spaces) switch them on with env vars.
+# Single-container hosts can switch them on with env vars.
 set -e
 
 if [ "${RUN_MIGRATIONS_ON_START:-0}" = "1" ]; then

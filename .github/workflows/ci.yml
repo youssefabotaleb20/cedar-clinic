@@ -29,12 +29,13 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-docker.txt
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test -v 2
 
   tidb:
-    # The free live demo uses TiDB Cloud (MySQL-compatible), so run the suite on TiDB too.
+    # The live demo runs on Vercel with TiDB Cloud through PyMySQL, so this job
+    # installs only requirements.txt (no mysqlclient) to test that exact path.
     name: Tests on TiDB 8.5
     runs-on: ubuntu-latest
     services:
@@ -52,6 +53,8 @@ jobs:
           cache: pip
       - run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config mysql-client
       - run: pip install -r requirements.txt
+      - name: Confirm the pure-Python driver is in use
+        run: python -c "import django, os; os.environ['DJANGO_SETTINGS_MODULE'] = 'config.settings'; django.setup(); from django.conf import settings; assert settings.MYSQL_DRIVER == 'pymysql', settings.MYSQL_DRIVER"
       - name: Wait for TiDB
         run: for i in $(seq 1 30); do mysql -h127.0.0.1 -P4000 -uroot -e "select 1" && break; sleep 2; done
       - run: python manage.py test -v 2

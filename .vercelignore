@@ -1,0 +1,7 @@
+k8s
+docs
+docker
+.github
+Dockerfile
+docker-compose.yml
+.env*

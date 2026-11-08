@@ -170,3 +170,21 @@ def healthz(request):
     except Exception:
         return JsonResponse({"status": "error", "database": "unreachable"}, status=503)
     return JsonResponse({"status": "ok"})
+
+
+def cron_send_reminders(request):
+    """Reminders endpoint for Vercel Cron, which has no shell to run the command.
+
+    Vercel sends `Authorization: Bearer <CRON_SECRET>`; anything else is refused.
+    """
+    from django.conf import settings
+    from django.utils.crypto import constant_time_compare
+
+    from .services import send_due_reminders
+
+    if not settings.CRON_SECRET:
+        raise Http404("Cron endpoint is disabled")
+    expected = f"Bearer {settings.CRON_SECRET}"
+    if not constant_time_compare(request.headers.get("Authorization", ""), expected):
+        return JsonResponse({"error": "unauthorized"}, status=401)
+    return JsonResponse({"sent": send_due_reminders()})
