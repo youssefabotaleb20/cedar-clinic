@@ -12,7 +12,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libmariadb3 \
+ && apt-get install -y --no-install-recommends libmariadb3 ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 app
 WORKDIR /app
