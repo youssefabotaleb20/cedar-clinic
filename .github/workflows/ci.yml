@@ -50,10 +50,12 @@ jobs:
 
   kubernetes:
     name: Deploy to kind
-    runs-on: ubuntu-latest
+    # kind cluster creation started failing when ubuntu-latest moved to Ubuntu 26;
+    # pin 24.04 and use a current kind-action.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: helm/kind-action@v1.12.0
+      - uses: helm/kind-action@v1.15.2
         with:
           cluster_name: clinic
       - run: docker build -t cedar-clinic:local .
