@@ -2,6 +2,8 @@
 
 A clinic appointment system built with **Django and MySQL**, packaged with **Docker Compose** and deployable to **Kubernetes**.
 
+**Live demo:** https://cedar-clinic.vercel.app (log in as `patient` / `demo-pass-123`). Design decisions and trade-offs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 Patients pick a doctor, choose a free time slot and get email confirmations and reminders. Front-desk staff see each day's schedule and mark visits as completed or no-show. Admins manage doctors, working hours and appointments in the Django admin.
 
 | Pick a slot | Front desk | Mobile |
@@ -101,9 +103,9 @@ DJANGO_TESTING=1 python manage.py test
 GitHub Actions (`.github/workflows/ci.yml`) runs four jobs on every push:
 
 1. The test suite against a real **MySQL 8.4** service (mysqlclient), with a check for missing migrations.
-1. The test suite against **TiDB 8.5** using only the pure-Python driver, which is the production path.
-2. A **Docker Compose** smoke test that builds, starts the stack and checks the app.
-3. A **Kubernetes** deploy to a kind cluster that waits for migrations and the rollout, checks `/healthz` through the Service and runs the reminders CronJob once.
+2. The test suite against **TiDB 8.5** using only the pure-Python driver, which is the production path.
+3. A **Docker Compose** smoke test that builds, starts the stack and checks the app.
+4. A **Kubernetes** deploy to a kind cluster that waits for migrations and the rollout, checks `/healthz` through the Service and runs the reminders CronJob once.
 
 ## Free live demo: Vercel + TiDB Cloud
 
@@ -150,3 +152,7 @@ After that, each push to `main` deploys on Vercel, and once CI is green the migr
 | `DB_SSL_MODE`, `DB_SSL_CA` | from URL / certifi | TLS to hosted MySQL |
 | `RUN_MIGRATIONS_ON_START` | `0` | single-container hosts: migrate and seed on start |
 | `RUN_REMINDER_LOOP` | `0` | single-container hosts: send reminders every `REMINDER_INTERVAL_SECONDS` (600) |
+
+## License
+
+MIT, see [LICENSE](LICENSE).
