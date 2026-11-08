@@ -1,0 +1,4 @@
+# Container image: adds the C MySQL driver (Django's recommended one) and gunicorn.
+-r requirements.txt
+gunicorn==26.2.0
+mysqlclient==2.2.7
