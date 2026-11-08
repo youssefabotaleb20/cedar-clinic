@@ -5,8 +5,8 @@ FROM python:3.13-slim AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential default-libmysqlclient-dev pkg-config \
  && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+COPY requirements.txt requirements-docker.txt ./
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements-docker.txt
 
 # ---- runtime stage: no compilers, non-root user ----
 FROM python:3.13-slim

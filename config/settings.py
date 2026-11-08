@@ -1,7 +1,7 @@
 """Django settings for the clinic booking system.
 
 Everything environment-specific comes from environment variables so the same
-image runs locally, in Docker Compose, on Kubernetes and on a Hugging Face Space.
+code runs locally, in Docker Compose, on Kubernetes and on Vercel.
 """
 
 import os
@@ -10,6 +10,22 @@ from pathlib import Path
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Vercel sets VERCEL=1 in builds and functions.
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+
+# MySQL driver: mysqlclient (C extension) in the Docker image, PyMySQL (pure
+# Python) where a C toolchain isn't available, such as Vercel.
+try:
+    import MySQLdb  # noqa: F401
+
+    MYSQL_DRIVER = "mysqlclient"
+except ImportError:
+    import pymysql
+
+    pymysql.version_info = (2, 2, 7, "final", 0)  # Django checks for mysqlclient >= 2.2.1
+    pymysql.install_as_MySQLdb()
+    MYSQL_DRIVER = "pymysql"
 
 
 def env_bool(name, default=False):
@@ -31,10 +47,9 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-# Hugging Face Spaces set SPACE_HOST (e.g. user-cedar-clinic.hf.space).
-if space_host := os.environ.get("SPACE_HOST"):
-    ALLOWED_HOSTS.append(space_host)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{space_host}")
+if ON_VERCEL:
+    ALLOWED_HOSTS.append(".vercel.app")
+    CSRF_TRUSTED_ORIGINS.append("https://*.vercel.app")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -83,21 +98,29 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=60,
+        # Serverless functions can't share pooled connections between requests.
+        conn_max_age=0 if ON_VERCEL else 60,
     )
 }
 if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
     db_options = DATABASES["default"].setdefault("OPTIONS", {})
     db_options.update({"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"})
-    # Hosted MySQL (Aiven, TiDB Cloud) hands out URIs ending in ?ssl-mode=REQUIRED.
-    # mysqlclient spells that option ssl_mode, so translate it.
-    ssl_mode = db_options.pop("ssl-mode", None) or os.environ.get("DB_SSL_MODE")
-    if ssl_mode:
-        db_options["ssl_mode"] = ssl_mode.upper()
-    # VERIFY_CA / VERIFY_IDENTITY (TiDB Cloud asks for this) need a CA bundle;
-    # the system bundle covers public providers.
-    if ssl_mode and ssl_mode.upper().startswith("VERIFY") or os.environ.get("DB_SSL_CA"):
-        db_options["ssl"] = {"ca": os.environ.get("DB_SSL_CA", "/etc/ssl/certs/ca-certificates.crt")}
+    # Hosted MySQL (TiDB Cloud, Aiven) hands out URIs ending in ?ssl-mode=REQUIRED
+    # or VERIFY_IDENTITY. Translate that into each driver's own options.
+    ssl_mode = (db_options.pop("ssl-mode", None) or os.environ.get("DB_SSL_MODE") or "").upper()
+    ssl_ca = os.environ.get("DB_SSL_CA")
+    if ssl_mode.startswith("VERIFY") or ssl_ca:
+        import certifi
+
+        # Verified TLS: CA bundle plus hostname check (the default for both drivers).
+        db_options["ssl"] = {"ca": ssl_ca or certifi.where()}
+        if MYSQL_DRIVER == "mysqlclient":
+            db_options["ssl_mode"] = ssl_mode or "VERIFY_IDENTITY"
+    elif ssl_mode == "REQUIRED":
+        if MYSQL_DRIVER == "mysqlclient":
+            db_options["ssl_mode"] = "REQUIRED"
+        else:
+            db_options["ssl"] = {"check_hostname": False}  # encrypted, unverified
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -118,8 +141,12 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
-if os.environ.get("DJANGO_TESTING"):
+if os.environ.get("DJANGO_TESTING") or ON_VERCEL:
     STORAGES["staticfiles"]["BACKEND"] = "django.contrib.staticfiles.storage.StaticFilesStorage"
+if ON_VERCEL:
+    # No collectstatic step on Vercel: WhiteNoise serves straight from the app
+    # and package static folders.
+    WHITENOISE_USE_FINDERS = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -143,20 +170,13 @@ CLINIC_NAME = os.environ.get("CLINIC_NAME", "Cedar Clinic")
 # How far ahead patients may book, and how early reminders go out.
 BOOKING_WINDOW_DAYS = int(os.environ.get("BOOKING_WINDOW_DAYS", "30"))
 REMINDER_HOURS_AHEAD = int(os.environ.get("REMINDER_HOURS_AHEAD", "24"))
+# Shared secret for the reminders endpoint called by Vercel Cron.
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
 if not DEBUG:
     SESSION_COOKIE_SECURE = env_bool("DJANGO_SECURE_COOKIES", True)
     CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# Hugging Face shows a Space inside an iframe on huggingface.co. Browsers treat
-# that as a third-party context, so cookies must be SameSite=None (and Secure),
-# and the page must allow huggingface.co to frame it.
-if env_bool("DJANGO_ALLOW_HF_EMBED", False):
-    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SAMESITE = CSRF_COOKIE_SAMESITE = "None"
-    CONTENT_SECURITY_POLICY_FRAME_ANCESTORS = "'self' https://huggingface.co"
-    MIDDLEWARE.insert(0, "config.middleware.frame_ancestors")
 
 LOGGING = {
     "version": 1,

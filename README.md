@@ -85,7 +85,7 @@ kubectl -n clinic create job reminders-now --from=cronjob/send-reminders
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt   # mysqlclient needs libmysqlclient-dev and pkg-config
+pip install -r requirements.txt   # PyMySQL; use requirements-docker.txt for mysqlclient
 export DJANGO_DEBUG=1             # SQLite is used when DATABASE_URL is unset
 python manage.py migrate && python manage.py seed_demo && python manage.py runserver
 ```
@@ -96,36 +96,42 @@ python manage.py migrate && python manage.py seed_demo && python manage.py runse
 DJANGO_TESTING=1 python manage.py test
 ```
 
-30 tests cover slot generation, double booking (service and database constraint), cancelling and re-booking, the booking window, the reminder window and idempotency, retry after a mail failure, permissions, and the views.
+33 tests cover slot generation, double booking (service and database constraint), cancelling and re-booking, the booking window, the reminder window and idempotency, retry after a mail failure, permissions, the cron endpoint, and the views.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs three jobs on every push:
+GitHub Actions (`.github/workflows/ci.yml`) runs four jobs on every push:
 
-1. The test suite against a real **MySQL 8.4** service, with a check for missing migrations.
+1. The test suite against a real **MySQL 8.4** service (mysqlclient), with a check for missing migrations.
+1. The test suite against **TiDB 8.5** using only the pure-Python driver, which is the production path.
 2. A **Docker Compose** smoke test that builds, starts the stack and checks the app.
 3. A **Kubernetes** deploy to a kind cluster that waits for migrations and the rollout, checks `/healthz` through the Service and runs the reminders CronJob once.
 
-## Free live demo: Hugging Face Space + Aiven MySQL
+## Free live demo: Vercel + TiDB Cloud
 
 The demo runs at no cost and needs no credit card:
 
-- **App:** a [Hugging Face Docker Space](https://huggingface.co/docs/hub/spaces-sdks-docker) built from this repo's `Dockerfile`.
-- **Database:** [Aiven's free MySQL plan](https://aiven.io/free-mysql-database).
+- **App:** Vercel's Hobby plan. The Django app runs as a Python serverless function (`api/index.py`, `vercel.json`).
+- **Database:** TiDB Cloud's free Starter tier, which is MySQL-compatible and uses verified TLS.
 
-A Space runs one container, so it switches on two extras in `docker/entrypoint.sh`: migrations and demo data on start, and a background loop that sends reminders.
+How the pieces map:
+
+| Concern | Docker / Kubernetes | Vercel |
+|---|---|---|
+| MySQL driver | `mysqlclient` (`requirements-docker.txt`) | PyMySQL, pure Python (`requirements.txt`) |
+| Migrations and demo data | migrate service or Job | `.github/workflows/migrate-production.yml` after CI passes |
+| Reminders | loop service or CronJob | Vercel Cron calls `/internal/cron/send-reminders` daily, authenticated with `CRON_SECRET` |
+| Static files | `collectstatic` + WhiteNoise | WhiteNoise serving from finders |
+
+CI runs the whole test suite on TiDB using only `requirements.txt`, so the PyMySQL + TiDB path that production uses is tested on every push.
 
 Setup, done once:
 
-1. Create a free MySQL service on Aiven and copy its **Service URI** (`mysql://avnadmin:...@...aivencloud.com:PORT/defaultdb?ssl-mode=REQUIRED`).
-2. Create a Space with the **Docker** SDK and the blank template. In its **Settings**, add:
-   - Secrets: `DATABASE_URL` (the Aiven URI) and `DJANGO_SECRET_KEY` (any long random string).
-   - Variables: `RUN_MIGRATIONS_ON_START=1`, `RUN_REMINDER_LOOP=1`, `DJANGO_ALLOW_HF_EMBED=1`, `WEB_CONCURRENCY=2`.
-3. On GitHub, go to **Settings > Secrets and variables > Actions** and add:
-   - Secret `HF_TOKEN`: a Hugging Face token with write access.
-   - Variable `HF_SPACE`: for example `youssefabotaleb20/cedar-clinic`.
+1. In TiDB Cloud, create a Starter cluster and a database called `cedar`. Build the URL as `mysql://USER:PASSWORD@HOST:4000/cedar?ssl-mode=VERIFY_IDENTITY`.
+2. In Vercel, import this repo with the **Other** framework preset and set these environment variables:
+   - `DATABASE_URL` (the TiDB URL)
+   - `DJANGO_SECRET_KEY` and `CRON_SECRET` (long random strings)
+3. On GitHub, add the repository secret `PROD_DATABASE_URL` with the same TiDB URL, then run **Migrate production database** once from the Actions tab.
 
-From then on, every push to `main` that passes CI is deployed to the Space by `.github/workflows/deploy-space.yml`.
-
-Free Spaces go to sleep after about two days without visitors and wake up on the next visit. Emails go to the console unless you set the `EMAIL_*` variables for an SMTP provider.
+After that, each push to `main` deploys on Vercel, and once CI is green the migrations run. Emails go to the function logs unless you set the `EMAIL_*` variables for an SMTP provider.
 
 ## Configuration
 
@@ -140,6 +146,7 @@ Free Spaces go to sleep after about two days without visitors and wake up on the
 | `CLINIC_TIME_ZONE` | `Africa/Cairo` | |
 | `BOOKING_WINDOW_DAYS` | `30` | how far ahead patients can book |
 | `REMINDER_HOURS_AHEAD` | `24` | when reminders go out |
+| `CRON_SECRET` | empty | enables `/internal/cron/send-reminders` (Bearer token) |
+| `DB_SSL_MODE`, `DB_SSL_CA` | from URL / certifi | TLS to hosted MySQL |
 | `RUN_MIGRATIONS_ON_START` | `0` | single-container hosts: migrate and seed on start |
 | `RUN_REMINDER_LOOP` | `0` | single-container hosts: send reminders every `REMINDER_INTERVAL_SECONDS` (600) |
-| `DJANGO_ALLOW_HF_EMBED` | `0` | allow the huggingface.co iframe (cross-site cookies, frame-ancestors) |
