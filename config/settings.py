@@ -94,6 +94,10 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.mysql":
     ssl_mode = db_options.pop("ssl-mode", None) or os.environ.get("DB_SSL_MODE")
     if ssl_mode:
         db_options["ssl_mode"] = ssl_mode.upper()
+    # VERIFY_CA / VERIFY_IDENTITY (TiDB Cloud asks for this) need a CA bundle;
+    # the system bundle covers public providers.
+    if ssl_mode and ssl_mode.upper().startswith("VERIFY") or os.environ.get("DB_SSL_CA"):
+        db_options["ssl"] = {"ca": os.environ.get("DB_SSL_CA", "/etc/ssl/certs/ca-certificates.crt")}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
