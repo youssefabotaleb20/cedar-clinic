@@ -33,6 +33,29 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test -v 2
 
+  tidb:
+    # The free live demo uses TiDB Cloud (MySQL-compatible), so run the suite on TiDB too.
+    name: Tests on TiDB 8.5
+    runs-on: ubuntu-latest
+    services:
+      tidb:
+        image: pingcap/tidb:v8.5.1
+        ports: ["4000:4000"]
+    env:
+      DJANGO_TESTING: "1"
+      DATABASE_URL: mysql://root@127.0.0.1:4000/clinic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config mysql-client
+      - run: pip install -r requirements.txt
+      - name: Wait for TiDB
+        run: for i in $(seq 1 30); do mysql -h127.0.0.1 -P4000 -uroot -e "select 1" && break; sleep 2; done
+      - run: python manage.py test -v 2
+
   compose:
     name: Docker Compose smoke test
     runs-on: ubuntu-latest
