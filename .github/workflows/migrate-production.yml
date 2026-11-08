@@ -1,0 +1,38 @@
+name: Migrate production database
+
+# Vercel functions can't run management commands, so schema migrations and the
+# demo seed run from here after CI passes on main. Needs the repository secret
+# PROD_DATABASE_URL (the same value as DATABASE_URL on Vercel).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      DJANGO_SECRET_KEY: migrations-only-not-used-for-signing
+    steps:
+      - name: Skip when no production database is configured
+        id: check
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "PROD_DATABASE_URL not set; nothing to do."; echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: steps.check.outputs.skip != 'true'
+        run: pip install -r requirements.txt
+      - if: steps.check.outputs.skip != 'true'
+        run: |
+          python manage.py migrate --noinput
+          python manage.py seed_demo

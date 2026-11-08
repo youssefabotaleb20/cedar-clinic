@@ -98,3 +98,21 @@ class OpsTests(TestCase):
         call_command("seed_demo", stdout=open("/dev/null", "w"))
         call_command("seed_demo", stdout=open("/dev/null", "w"))
         self.assertEqual(User.objects.filter(username="patient").count(), 1)
+
+
+class CronEndpointTests(TestCase):
+    url = "/internal/cron/send-reminders"
+
+    def test_disabled_without_secret(self):
+        with self.settings(CRON_SECRET=""):
+            self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_rejects_wrong_secret(self):
+        with self.settings(CRON_SECRET="s3cret"):
+            response = self.client.get(self.url, HTTP_AUTHORIZATION="Bearer nope")
+        self.assertEqual(response.status_code, 401)
+
+    def test_sends_with_right_secret(self):
+        with self.settings(CRON_SECRET="s3cret"):
+            response = self.client.get(self.url, HTTP_AUTHORIZATION="Bearer s3cret")
+        self.assertJSONEqual(response.content, {"sent": 0})

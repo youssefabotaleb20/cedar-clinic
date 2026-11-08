@@ -1,5 +1,7 @@
+# Runtime dependencies shared by every target. Pure Python, so they install on
+# serverless hosts (Vercel) as well as in Docker.
 Django==5.2.18
 dj-database-url==3.1.2
-gunicorn==26.2.0
-mysqlclient==2.2.7
 whitenoise==6.12.0
+PyMySQL==1.1.1
+certifi==2025.8.3
