@@ -73,14 +73,18 @@ jobs:
 
   kubernetes:
     name: Deploy to kind
-    # kind cluster creation started failing when ubuntu-latest moved to Ubuntu 26;
-    # pin 24.04 and use a current kind-action.
+    # Pinned so the preinstalled Go, Docker and kubectl stay predictable.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - uses: helm/kind-action@v1.15.2
-        with:
-          cluster_name: clinic
+      # Install kind from the Go module proxy instead of GitHub release assets:
+      # release downloads have been returning 504s, which killed this job
+      # before any of our steps ran.
+      # Go is preinstalled on the runner image.
+      - run: |
+          go install sigs.k8s.io/kind@v0.30.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: kind create cluster --name clinic --wait 120s
       - run: docker build -t cedar-clinic:local .
       - run: kind load docker-image cedar-clinic:local --name clinic
       - run: kubectl apply -k k8s/
