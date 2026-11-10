@@ -4,9 +4,16 @@ This document covers what the README doesn't: how a request moves through the ap
 
 ## Request flow
 
+### Finding free times
+
+Free times are computed, never stored. `Doctor.free_slots_by_day(days)` walks the doctor's `WorkingHours` for each day, stepping by `slot_minutes`, and drops slots that are already booked or in the past. It needs at most two queries however many days it covers: one for the working hours (or none when they were prefetched) and one for the booked appointments in those days.
+
+- **Doctors list (`/`).** Shows each doctor's next three free times and the three soonest appointments across all doctors, looking 21 days ahead (`LOOKAHEAD_DAYS`, capped by the booking window). Working hours are prefetched and the bookings for every listed doctor are loaded in one query, so the page costs a fixed number of queries rather than one per doctor per day.
+- **Booking page (`/doctors/<id>/`).** A three-week calendar shows how many free times each day has, and the selected day's times are grouped into morning, afternoon and evening. `available_slots(day)` is the one-day form of the same function and is used to re-check a day after a failed booking.
+
 ### Booking a slot
 
-1. The patient opens `/doctors/<id>/`. `Doctor.available_slots(day)` builds the free start times from the doctor's `WorkingHours` for that weekday, stepping by `slot_minutes`, and drops slots that are already booked or in the past.
+1. The patient picks a time on `/doctors/<id>/`.
 2. The patient submits the form (POST, CSRF-protected, login required). The view calls `booking.services.book_appointment`, which holds all the booking rules.
 3. Inside one transaction, the service:
    - checks the date is inside the booking window (`BOOKING_WINDOW_DAYS`),
@@ -29,7 +36,7 @@ The same function is triggered three ways, depending on where the app runs:
 
 ### Front desk
 
-Staff open `/staff/?date=...` for a day view with counts per status, and change a visit's status with a POST to `/staff/appointments/<id>/status/`. Cancelling from here goes through `cancel_appointment(by_staff=True)`, which skips the "only future visits" rule that applies to patients.
+Staff open `/staff/?date=...` for a day view with counts per status and the day's visits grouped by doctor (cancelled visits are counted but not listed). They change a visit's status with a POST to `/staff/appointments/<id>/status/`. Cancelling from here goes through `cancel_appointment(by_staff=True)`, which skips the "only future visits" rule that applies to patients.
 
 ## Data model
 
@@ -44,7 +51,7 @@ Specialty 1───* Doctor 1───* WorkingHours (weekday, start_time, end_
                      holds_slot (True or NULL), reminder_sent_at
 ```
 
-- Slots are not stored. They are computed from `WorkingHours` and `slot_minutes`, so changing a doctor's hours takes effect at once and there is no slot table to keep in sync.
+- Slots are not stored. They are computed from `WorkingHours` and `slot_minutes` (see "Finding free times"), so changing a doctor's hours takes effect at once and there is no slot table to keep in sync.
 - `Appointment` has an index on `(status, date)` for the dashboard and the reminder query.
 - Doctors use `on_delete=PROTECT`, so a doctor with appointment history can't be deleted by accident. Set `is_active` to false instead.
 
@@ -67,6 +74,14 @@ Specialty 1───* Doctor 1───* WorkingHours (weekday, start_time, end_
 **Rejected:**
 - *A partial unique index (`WHERE status = 'booked'`).* This is the obvious design, but MySQL doesn't support partial indexes. Django doesn't create conditional constraints on MySQL and only shows a system-check warning.
 - *Code checks only.* Two requests can both see the slot as free before either one inserts. The row lock covers that in normal use, and the constraint is the guarantee for any path that doesn't lock, such as adding an appointment by hand in the Django admin.
+
+### Free times computed in batches
+
+**Chosen:** compute free times for a range of days per doctor in Python, from one bookings query and prefetched working hours.
+
+**Rejected:**
+- *A stored slot table.* Every change to working hours or visit length would need a migration of future slots, and the table would have to stay in sync with bookings.
+- *Calling `available_slots(day)` for each day.* The first version did this. The redesigned doctors list shows three weeks for every doctor, which would have meant one query per doctor per day.
 
 ### One service module for all business rules
 
@@ -109,6 +124,7 @@ Plain manifests plus Kustomize keep it readable without Helm templating. CI depl
 - **Reminders on Vercel run once a day.** The Hobby plan allows only daily cron jobs, so a patient gets the reminder somewhere between 0 and 24 hours before the visit, not at exactly 24 hours. Compose and Kubernetes run it every 10 minutes.
 - **No real email on the live demo.** With no SMTP provider configured, emails go to the function logs. Setting the `EMAIL_*` variables for any SMTP service turns them on.
 - **One clinic time zone.** All times use `CLINIC_TIME_ZONE`. Patients in other time zones see clinic time.
+- **The doctors list looks only 21 days ahead.** A doctor with nothing free in that time shows no next free time, even if the booking window is longer.
 - **Fixed-length visits.** Every visit with a doctor is `slot_minutes` long. There are no visit types of different lengths.
 - **Cold starts.** The first request after a quiet period on Vercel can take a few seconds.
 - **Demo secrets in `k8s/`.** The Kustomize secret generator holds demo values and must be replaced for a real cluster.
