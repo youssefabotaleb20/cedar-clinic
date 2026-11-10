@@ -1,31 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Doctors{% endblock %}
-{% block content %}
+{% block hero %}
 <section class="hero">
-  <h1>Book a visit in under a minute</h1>
-  <p>Pick a doctor, choose a free time, and we email you a confirmation and a reminder the day before.</p>
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <h1>See a doctor this&nbsp;week.</h1>
+      <p>Choose a free time below and it's yours. We email a confirmation straight away and a reminder the day before.</p>
+    </div>
+    {% if soonest %}
+    <aside class="soonest" aria-labelledby="soonest-title">
+      <h2 id="soonest-title">Soonest free times</h2>
+      <ol>
+        {% for doctor, day, slot in soonest %}
+          <li>
+            <a href="{% url 'booking:doctor_detail' doctor.pk %}?date={{ day|date:'Y-m-d' }}&amp;time={{ slot|time:'H:i' }}">
+              <span class="soonest-time">{{ slot|time:"H:i" }}</span>
+              <span class="soonest-day">{% if day == today %}Today{% else %}{{ day|date:"l j M" }}{% endif %}</span>
+              <span class="soonest-who">{{ doctor }}, {{ doctor.specialty|lower }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ol>
+    </aside>
+    {% endif %}
+  </div>
 </section>
-
-<form class="filters" method="get">
-  <a class="chip {% if not selected_specialty %}chip-active{% endif %}" href="{% url 'booking:home' %}">All</a>
+{% endblock %}
+{% block content %}
+<nav class="tabs" aria-label="Filter by specialty">
+  <a href="{% url 'booking:home' %}"{% if not selected_specialty %} aria-current="true"{% endif %}>All doctors</a>
   {% for specialty in specialties %}
-    <a class="chip {% if selected_specialty == specialty.pk|stringformat:'s' %}chip-active{% endif %}" href="?specialty={{ specialty.pk }}">{{ specialty.name }}</a>
+    <a href="?specialty={{ specialty.pk }}"{% if selected_specialty == specialty.pk|stringformat:'s' %} aria-current="true"{% endif %}>{{ specialty.name }}</a>
   {% endfor %}
-</form>
+</nav>
 
-<div class="grid">
+<ul class="roster">
   {% for doctor in doctors %}
-    <article class="card doctor-card">
-      <div class="avatar" aria-hidden="true">{{ doctor.name|slice:":1" }}</div>
-      <div>
-        <h2>{{ doctor }}</h2>
-        <p class="muted">{{ doctor.specialty }} · {{ doctor.slot_minutes }} min visits</p>
-        <p>{{ doctor.bio }}</p>
-        <a class="btn" href="{% url 'booking:doctor_detail' doctor.pk %}">See free times</a>
+    <li class="doctor">
+      <span class="initials" aria-hidden="true">{{ doctor.name|cut:"Dr. "|slice:":1" }}</span>
+      <div class="doctor-about">
+        <h2><a href="{% url 'booking:doctor_detail' doctor.pk %}">{{ doctor }}</a></h2>
+        <p class="doctor-meta">{{ doctor.specialty }}, {{ doctor.slot_minutes }}-minute visits</p>
+        <p class="doctor-bio">{{ doctor.bio }}</p>
       </div>
-    </article>
+      <div class="doctor-times">
+        {% if doctor.next_free %}
+          <p class="doctor-times-day">Next free{% with first=doctor.next_free.0.0 %}, {% if first == today %}today{% else %}{{ first|date:"l j M" }}{% endif %}{% endwith %}</p>
+          <div class="time-row">
+            {% for day, slot in doctor.next_free %}
+              <a class="time" href="{% url 'booking:doctor_detail' doctor.pk %}?date={{ day|date:'Y-m-d' }}&amp;time={{ slot|time:'H:i' }}"{% if day != doctor.next_free.0.0 %} title="{{ day|date:'l j M' }}"{% endif %}>{{ slot|time:"H:i" }}{% if day != doctor.next_free.0.0 %}<small>{{ day|date:"D" }}</small>{% endif %}</a>
+            {% endfor %}
+            <a class="time time-more" href="{% url 'booking:doctor_detail' doctor.pk %}">All times</a>
+          </div>
+        {% else %}
+          <p class="doctor-times-day">Fully booked for the next three weeks.</p>
+        {% endif %}
+      </div>
+    </li>
   {% empty %}
-    <p class="empty">No doctors yet. Run <code>python manage.py seed_demo</code> or add some in the admin.</p>
+    <li class="empty">No doctors yet. Run <code>python manage.py seed_demo</code> or add some in the admin.</li>
   {% endfor %}
-</div>
+</ul>
 {% endblock %}

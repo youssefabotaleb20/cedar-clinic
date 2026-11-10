@@ -1,17 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Log in{% endblock %}
 {% block content %}
-<section class="card auth">
-  <h1>Log in</h1>
-  <form method="post">
-    {% csrf_token %}
-    {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
-    <label class="field">Username {{ form.username }}</label>
-    <label class="field">Password {{ form.password }}</label>
-    <input type="hidden" name="next" value="{{ next }}">
-    <button class="btn btn-large" type="submit">Log in</button>
-  </form>
-  <p class="muted">New here? <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a>.</p>
-  <p class="muted small">Demo accounts: <code>patient</code> or <code>staff</code>, password <code>demo-pass-123</code>.</p>
-</section>
+<div class="auth">
+  <section class="auth-form">
+    <h1 class="page-title">Log in</h1>
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+      <label class="field">Username {{ form.username }}</label>
+      <label class="field">Password {{ form.password }}</label>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-resin btn-block" type="submit">Log in</button>
+    </form>
+    <p class="auth-alt">New here? <a href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a>.</p>
+  </section>
+  <aside class="auth-side">
+    <h2>Trying the demo?</h2>
+    <p>Two accounts are ready. Both use the password <code>demo-pass-123</code>.</p>
+    <dl>
+      <div><dt><code>patient</code></dt><dd>Book and cancel visits.</dd></div>
+      <div><dt><code>staff</code></dt><dd>Run the front desk and the admin.</dd></div>
+    </dl>
+  </aside>
+</div>
 {% endblock %}

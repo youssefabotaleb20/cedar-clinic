@@ -3,27 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Book an appointment{% endblock %} · {{ clinic_name }}</title>
+  <title>{% block title %}Book an appointment{% endblock %} | {{ clinic_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="topbar">
     <div class="wrap topbar-inner">
-      <a class="brand" href="{% url 'booking:home' %}"><span class="brand-mark" aria-hidden="true">+</span>{{ clinic_name }}</a>
-      <nav class="nav">
-        <a href="{% url 'booking:home' %}">Doctors</a>
+      <a class="brand" href="{% url 'booking:home' %}">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 6 15h5l-6 7h7v7h8v-7h7l-6-7h5z" fill="currentColor"/></svg>
+        <span>{{ clinic_name }}</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="{% url 'booking:home' %}"{% if request.resolver_match.url_name == 'home' %} aria-current="page"{% endif %}>Doctors</a>
         {% if user.is_authenticated %}
-          <a href="{% url 'booking:my_appointments' %}">My appointments</a>
-          {% if user.is_staff %}<a href="{% url 'booking:dashboard' %}">Front desk</a><a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+          <a href="{% url 'booking:my_appointments' %}"{% if request.resolver_match.url_name == 'my_appointments' %} aria-current="page"{% endif %}>My visits</a>
+          {% if user.is_staff %}
+            <a href="{% url 'booking:dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %}>Front desk</a>
+            <a href="{% url 'admin:index' %}">Admin</a>
+          {% endif %}
           <form method="post" action="{% url 'logout' %}" class="inline">{% csrf_token %}<button class="link">Log out</button></form>
         {% else %}
           <a href="{% url 'login' %}">Log in</a>
-          <a class="btn btn-small" href="{% url 'signup' %}">Sign up</a>
+          <a class="btn btn-resin btn-small" href="{% url 'signup' %}">Sign up</a>
         {% endif %}
       </nav>
     </div>
   </header>
-  <main class="wrap">
+  {% block hero %}{% endblock %}
+  <main class="wrap main">
     {% if messages %}
       <div class="messages">
         {% for message in messages %}<div class="alert alert-{{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
@@ -31,6 +41,12 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
-  <footer class="footer wrap">Demo project · Django, MySQL, Docker and Kubernetes</footer>
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>{{ clinic_name }} is a demo project. No real appointments are made.</span>
+      <a href="https://github.com/youssefabotaleb20/cedar-clinic">Source on GitHub</a>
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

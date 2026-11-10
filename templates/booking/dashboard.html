@@ -1,45 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Front desk{% endblock %}
 {% block content %}
-<div class="dash-head">
-  <h1>Front desk · {{ day|date:"l j F Y" }}</h1>
-  <nav class="dash-nav">
-    <a class="btn btn-ghost" href="?date={{ previous_day|date:'Y-m-d' }}">← Previous</a>
-    <a class="btn btn-ghost" href="?">Today</a>
-    <a class="btn btn-ghost" href="?date={{ next_day|date:'Y-m-d' }}">Next →</a>
+<div class="desk-head">
+  <div>
+    <h1 class="page-title">{{ day|date:"l j F" }}</h1>
+    <p class="desk-tally">
+      <span class="status status-booked">{{ counts.booked }} booked</span>
+      <span class="status status-completed">{{ counts.completed }} completed</span>
+      <span class="status status-no_show">{{ counts.no_show }} no-show</span>
+      <span class="status status-cancelled">{{ counts.cancelled }} cancelled</span>
+    </p>
+  </div>
+  <nav class="pager" aria-label="Change day">
+    <a class="btn btn-quiet btn-small" href="?date={{ previous_day|date:'Y-m-d' }}" aria-label="Previous day">Previous</a>
+    <a class="btn btn-quiet btn-small" href="?">Today</a>
+    <a class="btn btn-quiet btn-small" href="?date={{ next_day|date:'Y-m-d' }}" aria-label="Next day">Next</a>
   </nav>
 </div>
-<div class="stats">
-  <div class="stat"><span>{{ counts.booked }}</span>Booked</div>
-  <div class="stat"><span>{{ counts.completed }}</span>Completed</div>
-  <div class="stat"><span>{{ counts.no_show }}</span>No-shows</div>
-  <div class="stat"><span>{{ counts.cancelled }}</span>Cancelled</div>
-</div>
-<div class="table-scroll">
-<table class="table">
-  <thead><tr><th>Time</th><th>Doctor</th><th>Patient</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-  <tbody>
-  {% for a in appointments %}
-    <tr>
-      <td>{{ a.start_time|time:"H:i" }}</td>
-      <td>{{ a.doctor }}</td>
-      <td>{{ a.patient.get_full_name|default:a.patient.username }}<br><span class="muted small">{{ a.patient.email }}</span></td>
-      <td>{{ a.reason|default:"—" }}</td>
-      <td><span class="badge badge-{{ a.status }}">{{ a.get_status_display }}</span></td>
-      <td>
-        {% if a.status == statuses.BOOKED %}
-        <div class="actions">
-          <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-small" name="status" value="completed">Completed</button></form>
-          <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-small" name="status" value="no_show">No-show</button></form>
-          <form method="post" action="{% url 'booking:set_status' a.pk %}" onsubmit="return confirm('Cancel and email the patient?')">{% csrf_token %}<button class="btn btn-ghost btn-small" name="status" value="cancelled">Cancel</button></form>
-        </div>
-        {% endif %}
-      </td>
-    </tr>
+
+<ol class="schedule">
+  {% regroup appointments by doctor as by_doctor %}
+  {% for group in by_doctor %}
+    <li class="schedule-doctor">
+      <h2>{{ group.grouper }}</h2>
+      <ol class="schedule-rows">
+        {% for a in group.list %}
+          <li class="row row-{{ a.status }}">
+            <span class="row-time">{{ a.start_time|time:"H:i" }}</span>
+            <div class="row-who">
+              <strong>{{ a.patient.get_full_name|default:a.patient.username }}</strong>
+              <span>{{ a.reason|default:"No reason given" }}{% if a.patient.email %}, {{ a.patient.email }}{% endif %}</span>
+            </div>
+            {% if a.status == statuses.BOOKED %}
+              <div class="row-actions">
+                <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-small" name="status" value="completed">Completed</button></form>
+                <form method="post" action="{% url 'booking:set_status' a.pk %}">{% csrf_token %}<button class="btn btn-quiet btn-small" name="status" value="no_show">No-show</button></form>
+                <form method="post" action="{% url 'booking:set_status' a.pk %}" onsubmit="return confirm('Cancel this visit and email the patient?')">{% csrf_token %}<button class="btn btn-quiet btn-small" name="status" value="cancelled">Cancel</button></form>
+              </div>
+            {% else %}
+              <span class="status status-{{ a.status }}">{{ a.get_status_display }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </li>
   {% empty %}
-    <tr><td colspan="6" class="empty">No appointments on this day.</td></tr>
+    <li class="blank"><p>No visits on this day.</p></li>
   {% endfor %}
-  </tbody>
-</table>
-</div>
+</ol>
 {% endblock %}
