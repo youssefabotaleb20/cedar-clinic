@@ -1,16 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Sign up{% endblock %}
 {% block content %}
-<section class="card auth">
-  <h1>Create an account</h1>
-  <form method="post">
-    {% csrf_token %}
-    {% for field in form %}
-      <label class="field">{{ field.label }} {{ field }}
-        {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
-      </label>
-    {% endfor %}
-    <button class="btn btn-large" type="submit">Sign up</button>
-  </form>
-</section>
+<div class="auth">
+  <section class="auth-form">
+    <h1 class="page-title">Create an account</h1>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <label class="field">{{ field.label }} {{ field }}
+          {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+        </label>
+      {% endfor %}
+      <button class="btn btn-resin btn-block" type="submit">Create account</button>
+    </form>
+    <p class="auth-alt">Already have one? <a href="{% url 'login' %}">Log in</a>.</p>
+  </section>
+  <aside class="auth-side">
+    <h2>What you get</h2>
+    <p>Book any free time with any of our doctors, see your upcoming visits, and cancel up to the minute it starts.</p>
+    <p>Confirmations and reminders go to the email address you give here.</p>
+  </aside>
+</div>
 {% endblock %}

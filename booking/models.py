@@ -34,23 +34,39 @@ class Doctor(models.Model):
 
     def available_slots(self, day: date) -> list[time]:
         """Free start times for `day`, excluding booked slots and times already past."""
-        slot = timedelta(minutes=self.slot_minutes)
-        taken = set(
-            self.appointments.filter(date=day, status=Appointment.Status.BOOKED).values_list(
-                "start_time", flat=True
+        return self.free_slots_by_day([day])[day]
+
+    def free_slots_by_day(self, days, *, taken=None) -> dict[date, list[time]]:
+        """Free start times for each of `days` in at most two queries.
+
+        `taken` is an optional set of (date, start_time) pairs already booked, so a
+        caller listing many doctors can load bookings for all of them at once.
+        Working hours come from `working_hours.all()`, which uses a prefetch if present.
+        """
+        days = list(days)
+        if taken is None:
+            taken = set(
+                self.appointments.filter(date__in=days, status=Appointment.Status.BOOKED).values_list(
+                    "date", "start_time"
+                )
             )
-        )
+        hours = list(self.working_hours.all())
+        slot = timedelta(minutes=self.slot_minutes)
         now = timezone.localtime()
-        slots = []
-        for hours in self.working_hours.filter(weekday=day.weekday()):
-            cursor = datetime.combine(day, hours.start_time)
-            end = datetime.combine(day, hours.end_time)
-            while cursor + slot <= end:
-                starts_at = timezone.make_aware(cursor)
-                if cursor.time() not in taken and starts_at > now:
-                    slots.append(cursor.time())
-                cursor += slot
-        return sorted(slots)
+        result = {}
+        for day in days:
+            slots = []
+            for block in hours:
+                if block.weekday != day.weekday():
+                    continue
+                cursor = datetime.combine(day, block.start_time)
+                end = datetime.combine(day, block.end_time)
+                while cursor + slot <= end:
+                    if (day, cursor.time()) not in taken and timezone.make_aware(cursor) > now:
+                        slots.append(cursor.time())
+                    cursor += slot
+            result[day] = sorted(slots)
+        return result
 
 
 class WorkingHours(models.Model):

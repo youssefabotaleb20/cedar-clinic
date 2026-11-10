@@ -1,29 +1,63 @@
 {% extends "base.html" %}
-{% block title %}My appointments{% endblock %}
+{% block title %}My visits{% endblock %}
 {% block content %}
-<h1>My appointments</h1>
-<h2 class="section-title">Upcoming</h2>
-{% for a in upcoming %}
-  <article class="card appt">
-    <div class="appt-when"><strong>{{ a.date|date:"D j M" }}</strong><span>{{ a.start_time|time:"H:i" }} to {{ a.end_time|time:"H:i" }}</span></div>
-    <div class="appt-what"><strong>{{ a.doctor }}</strong><span class="muted">{{ a.doctor.specialty }}{% if a.reason %} · {{ a.reason }}{% endif %}</span></div>
-    {% if a.can_cancel %}
-      <form method="post" action="{% url 'booking:cancel' a.pk %}" onsubmit="return confirm('Cancel this appointment?')">{% csrf_token %}<button class="btn btn-ghost">Cancel</button></form>
+<h1 class="page-title">My visits</h1>
+
+{% if upcoming %}
+  {% with next=upcoming.0 %}
+  <section class="slip slip-wide" aria-label="Your next visit">
+    <div class="slip-stub">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 6 15h5l-6 7h7v7h8v-7h7l-6-7h5z" fill="currentColor"/></svg>
+      <span>Next visit</span>
+    </div>
+    <div class="slip-when">
+      <span class="slip-time">{{ next.start_time|time:"H:i" }}</span>
+      <span class="slip-date">{{ next.date|date:"l j F" }}</span>
+    </div>
+    <dl class="slip-lines">
+      <div><dt>With</dt><dd>{{ next.doctor }}, {{ next.doctor.specialty|lower }}</dd></div>
+      <div><dt>Until</dt><dd class="num">{{ next.end_time|time:"H:i" }}</dd></div>
+      {% if next.reason %}<div><dt>Reason</dt><dd>{{ next.reason }}</dd></div>{% endif %}
+    </dl>
+    {% if next.can_cancel %}
+      <form method="post" action="{% url 'booking:cancel' next.pk %}" onsubmit="return confirm('Cancel this visit? The time goes back on the schedule.')">{% csrf_token %}<button class="btn btn-quiet">Cancel visit</button></form>
     {% endif %}
-  </article>
-{% empty %}
-  <p class="empty">Nothing booked. <a href="{% url 'booking:home' %}">Find a doctor</a>.</p>
-{% endfor %}
+  </section>
+  {% endwith %}
+
+  {% if upcoming|length > 1 %}
+  <h2 class="section-title">Also booked</h2>
+  <ul class="visits">
+    {% for a in upcoming|slice:"1:" %}
+      <li class="visit">
+        <span class="visit-time">{{ a.start_time|time:"H:i" }}</span>
+        <span class="visit-day">{{ a.date|date:"D j M" }}</span>
+        <span class="visit-who">{{ a.doctor }}{% if a.reason %}<small>{{ a.reason }}</small>{% endif %}</span>
+        {% if a.can_cancel %}
+          <form method="post" action="{% url 'booking:cancel' a.pk %}" onsubmit="return confirm('Cancel this visit? The time goes back on the schedule.')">{% csrf_token %}<button class="btn btn-quiet btn-small">Cancel</button></form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% else %}
+  <div class="blank">
+    <p>You have no visits booked.</p>
+    <a class="btn btn-resin" href="{% url 'booking:home' %}">Find a free time</a>
+  </div>
+{% endif %}
 
 {% if past %}
-<h2 class="section-title">History</h2>
-<table class="table">
-  <thead><tr><th>Date</th><th>Time</th><th>Doctor</th><th>Status</th></tr></thead>
-  <tbody>
+<h2 class="section-title">Past and cancelled</h2>
+<ul class="visits visits-past">
   {% for a in past %}
-    <tr><td>{{ a.date|date:"j M Y" }}</td><td>{{ a.start_time|time:"H:i" }}</td><td>{{ a.doctor }}</td><td><span class="badge badge-{{ a.status }}">{{ a.get_status_display }}</span></td></tr>
+    <li class="visit">
+      <span class="visit-time">{{ a.start_time|time:"H:i" }}</span>
+      <span class="visit-day">{{ a.date|date:"j M Y" }}</span>
+      <span class="visit-who">{{ a.doctor }}</span>
+      <span class="status status-{{ a.status }}">{{ a.get_status_display }}</span>
+    </li>
   {% endfor %}
-  </tbody>
-</table>
+</ul>
 {% endif %}
 {% endblock %}

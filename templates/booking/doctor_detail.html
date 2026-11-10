@@ -1,46 +1,102 @@
 {% extends "base.html" %}
 {% block title %}{{ doctor }}{% endblock %}
 {% block content %}
-<a class="back" href="{% url 'booking:home' %}">← All doctors</a>
-<section class="card">
-  <h1>{{ doctor }}</h1>
-  <p class="muted">{{ doctor.specialty }} · {{ doctor.slot_minutes }} min visits</p>
-  <p>{{ doctor.bio }}</p>
-</section>
+<a class="back" href="{% url 'booking:home' %}">All doctors</a>
 
-<h2 class="section-title">1. Choose a day</h2>
-<div class="days" role="list">
-  {% for day in open_days %}
-    <a role="listitem" class="day {% if day == selected %}day-active{% endif %}" href="?date={{ day|date:'Y-m-d' }}">
-      <span class="day-name">{{ day|date:"D" }}</span>
-      <span class="day-num">{{ day|date:"j" }}</span>
-      <span class="day-month">{{ day|date:"M" }}</span>
-    </a>
-  {% empty %}
-    <p class="empty">This doctor has no working hours in the next few weeks.</p>
-  {% endfor %}
-</div>
-
-{% if selected %}
-<h2 class="section-title">2. Pick a time on {{ selected|date:"l j F" }}</h2>
-<form method="post" class="booking-form">
-  {% csrf_token %}
-  <input type="hidden" name="date" value="{{ selected|date:'Y-m-d' }}">
-  <div class="slots">
-    {% for slot in slots %}
-      <label class="slot"><input type="radio" name="start_time" value="{{ slot|time:'H:i' }}" required><span>{{ slot|time:"H:i" }}</span></label>
-    {% empty %}
-      <p class="empty">Fully booked. Try another day.</p>
-    {% endfor %}
+<header class="profile">
+  <span class="initials initials-large" aria-hidden="true">{{ doctor.name|cut:"Dr. "|slice:":1" }}</span>
+  <div>
+    <h1>{{ doctor }}</h1>
+    <p class="doctor-meta">{{ doctor.specialty }}, {{ doctor.slot_minutes }}-minute visits</p>
+    <p class="doctor-bio">{{ doctor.bio }}</p>
   </div>
-  {% if slots %}
+</header>
+
+<form method="post" class="booking" id="booking">
+  {% csrf_token %}
+  <div class="booking-pick">
+    <section aria-labelledby="day-title">
+      <h2 id="day-title" class="pick-title">Day</h2>
+      <div class="calendar">
+        {% for cell in calendar %}
+          {% if cell.open and cell.free %}
+            <a class="cal-day{% if cell.day == selected %} is-selected{% endif %}" href="?date={{ cell.day|date:'Y-m-d' }}#booking"{% if cell.day == selected %} aria-current="date"{% endif %}>
+              <span class="cal-name">{{ cell.day|date:"D" }}</span>
+              <span class="cal-num">{{ cell.day|date:"j" }}</span>
+              <span class="cal-free">{{ cell.free }} free</span>
+            </a>
+          {% else %}
+            <span class="cal-day is-closed">
+              <span class="cal-name">{{ cell.day|date:"D" }}</span>
+              <span class="cal-num">{{ cell.day|date:"j" }}</span>
+              <span class="cal-free">{% if cell.open %}Full{% else %}Closed{% endif %}</span>
+            </span>
+          {% endif %}
+        {% empty %}
+          <p class="empty">This doctor has no working hours in the next few weeks.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if selected %}
+    <section aria-labelledby="time-title">
+      <h2 id="time-title" class="pick-title">Time on {{ selected|date:"l j F" }}</h2>
+      <input type="hidden" name="date" value="{{ selected|date:'Y-m-d' }}">
+      {% for part, items in slot_groups %}
+        <fieldset class="part">
+          <legend>{{ part }}</legend>
+          <div class="slots">
+            {% for slot in items %}
+              <label class="slot"><input type="radio" name="start_time" value="{{ slot|time:'H:i' }}" required{% if slot|time:'H:i' == preselected %} checked{% endif %}><span>{{ slot|time:"H:i" }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% empty %}
+        <p class="empty">No free times left on this day. Pick another day above.</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  {% if selected and slots %}
+  <aside class="slip" aria-label="Your appointment">
+    <div class="slip-stub">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 6 15h5l-6 7h7v7h8v-7h7l-6-7h5z" fill="currentColor"/></svg>
+      <span>Appointment card</span>
+    </div>
+    <dl class="slip-lines">
+      <div><dt>With</dt><dd>{{ doctor }}</dd></div>
+      <div><dt>Day</dt><dd>{{ selected|date:"l j F" }}</dd></div>
+      <div><dt>Time</dt><dd data-slip-time>{% if preselected %}{{ preselected }}{% else %}<span class="slip-blank">Pick a time</span>{% endif %}</dd></div>
+      <div><dt>Length</dt><dd>{{ doctor.slot_minutes }} minutes</dd></div>
+    </dl>
     <label class="field">Reason for visit {{ form.reason }}</label>
     {% if user.is_authenticated %}
-      <button class="btn btn-large" type="submit">Book appointment</button>
+      <button class="btn btn-resin btn-block" type="submit">Book this time</button>
     {% else %}
-      <p class="muted"><a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Log in</a> or <a href="{% url 'signup' %}?next={{ request.get_full_path|urlencode }}">create an account</a> to book.</p>
+      <a class="btn btn-resin btn-block" data-login-link href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Log in to book</a>
+      <p class="slip-note">New here? <a href="{% url 'signup' %}?next={{ request.get_full_path|urlencode }}">Create an account</a>.</p>
     {% endif %}
+  </aside>
   {% endif %}
 </form>
-{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    var out = document.querySelector("[data-slip-time]");
+    if (!out) return;
+    document.querySelectorAll('input[name="start_time"]').forEach(function (input) {
+      input.addEventListener("change", function () {
+        out.textContent = input.value;
+        var login = document.querySelector("[data-login-link]");
+        if (login) {
+          var next = location.pathname + "?date=" + input.form.date.value + "&time=" + input.value;
+          login.href = login.pathname + "?next=" + encodeURIComponent(next);
+        }
+        out.classList.remove("is-new"); void out.offsetWidth; out.classList.add("is-new");
+      });
+    });
+  })();
+</script>
 {% endblock %}

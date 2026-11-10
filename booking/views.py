@@ -1,4 +1,5 @@
-from datetime import timedelta
+from collections import defaultdict
+from datetime import time, timedelta
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -18,32 +19,78 @@ from .models import Appointment, Doctor, Specialty
 from .services import BookingError, book_appointment, booking_window, cancel_appointment
 
 
+# How many days ahead the doctors list and the booking calendar look for free times.
+LOOKAHEAD_DAYS = 21
+
+
+def _lookahead_days():
+    first_day, last_day = booking_window()
+    count = min(LOOKAHEAD_DAYS, (last_day - first_day).days + 1)
+    return [first_day + timedelta(days=i) for i in range(count)]
+
+
+def _part_of_day(slots):
+    groups = [("Morning", []), ("Afternoon", []), ("Evening", [])]
+    for slot in slots:
+        index = 0 if slot < time(12) else 1 if slot < time(17) else 2
+        groups[index][1].append(slot)
+    return [(name, items) for name, items in groups if items]
+
+
 def home(request):
-    doctors = Doctor.objects.filter(is_active=True).select_related("specialty")
+    doctors = Doctor.objects.filter(is_active=True).select_related("specialty").prefetch_related("working_hours")
     specialty_id = request.GET.get("specialty")
     if specialty_id and specialty_id.isdigit():
         doctors = doctors.filter(specialty_id=specialty_id)
+    doctors = list(doctors)
+
+    # One query for every doctor's bookings, then the next few free times per doctor.
+    days = _lookahead_days()
+    taken = defaultdict(set)
+    booked = Appointment.objects.filter(
+        doctor__in=doctors, date__in=days, status=Appointment.Status.BOOKED
+    ).values_list("doctor_id", "date", "start_time")
+    for doctor_id, day, start in booked:
+        taken[doctor_id].add((day, start))
+    soonest = []
+    for doctor in doctors:
+        by_day = doctor.free_slots_by_day(days, taken=taken[doctor.pk])
+        doctor.next_free = [(day, slot) for day in days for slot in by_day[day]][:3]
+        if doctor.next_free:
+            soonest.append((doctor.next_free[0], doctor))
+    soonest.sort(key=lambda item: item[0])
+
     return render(
         request,
         "booking/home.html",
         {
             "doctors": doctors,
+            "soonest": [(doctor, day, slot) for (day, slot), doctor in soonest[:3]],
             "specialties": Specialty.objects.filter(doctors__is_active=True).distinct(),
             "selected_specialty": specialty_id,
+            "today": timezone.localdate(),
         },
     )
 
 
 def doctor_detail(request, pk):
-    doctor = get_object_or_404(Doctor.objects.select_related("specialty"), pk=pk, is_active=True)
+    doctor = get_object_or_404(
+        Doctor.objects.select_related("specialty").prefetch_related("working_hours"), pk=pk, is_active=True
+    )
     first_day, last_day = booking_window()
-    days = [first_day + timedelta(days=i) for i in range((last_day - first_day).days + 1)]
-    working_weekdays = set(doctor.working_hours.values_list("weekday", flat=True))
-    open_days = [d for d in days if d.weekday() in working_weekdays]
+    window = [first_day + timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+    working_weekdays = {hours.weekday for hours in doctor.working_hours.all()}
+    open_days = [d for d in window if d.weekday() in working_weekdays]
+
+    days = _lookahead_days()
+    free = doctor.free_slots_by_day(days)
+    calendar = [
+        {"day": d, "open": d.weekday() in working_weekdays, "free": len(free[d])} for d in days
+    ]
 
     selected = parse_date(request.GET.get("date", "")) if request.GET.get("date") else None
     if selected not in open_days:
-        selected = next((d for d in open_days if doctor.available_slots(d)), None)
+        selected = next((d for d in days if free[d]), None)
 
     form = BookingForm(request.POST or None)
     if request.method == "POST":
@@ -71,14 +118,23 @@ def doctor_detail(request, pk):
         else:
             messages.error(request, "Please pick a time slot.")
 
+    if selected is None:
+        slots = []
+    elif selected in free:
+        slots = doctor.available_slots(selected) if request.method == "POST" else free[selected]
+    else:
+        slots = doctor.available_slots(selected)
+
     return render(
         request,
         "booking/doctor_detail.html",
         {
             "doctor": doctor,
-            "open_days": open_days[:14],
+            "calendar": calendar,
             "selected": selected,
-            "slots": doctor.available_slots(selected) if selected else [],
+            "slots": slots,
+            "slot_groups": _part_of_day(slots),
+            "preselected": request.POST.get("start_time") or request.GET.get("time", ""),
             "form": form,
         },
     )
